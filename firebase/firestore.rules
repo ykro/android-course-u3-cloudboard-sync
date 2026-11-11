@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Reglas de CloudBoard Sync. La app valida lo mismo en los UseCases, pero estas reglas
+// son la única barrera para quien llame a Firestore sin pasar por la app.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /boards/{boardId}/cards/{cardId} {
+      // Tablero colaborativo: cualquier persona con sesión lo ve.
+      allow read: if signedIn();
+
+      // Paso 6 del taller: esta regla deja que cualquier persona con sesión edite o borre tarjetas ajenas.
+      // Reemplázala por reglas separadas de create, update y delete que comparen ownerId con request.auth.uid.
+      allow write: if signedIn();
+    }
+  }
+}

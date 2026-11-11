@@ -1,0 +1,65 @@
+name: CI CloudBoard Sync (retroalimentación)
+
+on:
+  # Un commit que solo cambia documentos (*.md: ADR, checklist, AGENTS.md) no gasta minutos de
+  # Gradle. Para correr la CI a mano: pestaña Actions, "Run workflow".
+  push:
+    paths-ignore:
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Un push nuevo a la misma rama cancela la ejecución anterior, que ya no sirve.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Valida el checksum de gradle-wrapper.jar y guarda la caché entre ejecuciones.
+      - uses: gradle/actions/setup-gradle@v6
+
+      # Una sola invocación compila Kotlin una vez, con las advertencias como errores (igual que en
+      # tu máquina con -PwarningsAsErrors=true): ktlint, Android Lint, tests JVM y APK. Si hay una advertencia de Kotlin, la
+      # compilación falla y los tests no corren hasta que la corrijas; --continue sigue con ktlint.
+      - name: ktlint, Android Lint, tests JVM y APK sin advertencias
+        run: ./gradlew -PwarningsAsErrors=true check assembleDebug --continue
+
+      - name: Resumen de retroalimentación
+        if: always()
+        run: |
+          {
+            echo "## Resultado de CI"
+            echo ""
+            echo "Este resultado es retroalimentación sobre tu trabajo."
+            echo "Los tests públicos del reto son una muestra: el contrato completo de la guía del reto"
+            echo "tiene más casos borde y otros datos. Escribe tus propios tests y no modifiques"
+            echo "los tests oficiales ni este workflow."
+            echo ""
+            echo "| Clase de tests | Tests | Fallas |"
+            echo "| :--- | ---: | ---: |"
+            python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+          for path in sorted(glob.glob("app/build/test-results/testDebugUnitTest/TEST-*.xml")):
+              suite = ET.parse(path).getroot()
+              name = suite.get("name", "").rsplit(".", 1)[-1]
+              failed = int(suite.get("failures", 0)) + int(suite.get("errors", 0))
+              print(f"| {name} | {suite.get('tests')} | {failed} |")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"

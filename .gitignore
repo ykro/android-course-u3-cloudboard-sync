@@ -1,0 +1,17 @@
+# Gradle y compilación
+.gradle/
+build/
+.kotlin/
+captures/
+*.apk
+*.aab
+
+# Configuración local (SDK y Firebase): nunca se versiona
+local.properties
+google-services.json
+.env
+
+# IDE y sistema
+.idea/
+*.iml
+.DS_Store
